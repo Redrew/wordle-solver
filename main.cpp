@@ -179,23 +179,24 @@ struct Tree {
               const vector<ll> &guessesI) {
     ll k = 1;
     if (answersI.size() > 100) {
-        k = 10;
+      k = 10;
     }
     vector<pair<double, ll>> topK =
         rankGuesses(coloursLookup, answersI, guessesI, k);
     sort(topK.rbegin(), topK.rend());
     if (k > 1) {
-        cout << "Start search\n";
+      cout << "Start search\n";
     }
     for (const auto &item : topK) {
       ll guess = item.second;
       search(node, answersI, guessesI, guess);
       if (k > 1) {
-        cout << "Guess: " << guesses[guess] << ", Ent: " << item.first << ", EV: " << node->ev << "\n";
+        cout << "Guess: " << guesses[guess] << ", Ent: " << item.first
+             << ", EV: " << node->ev << "\n";
       }
     }
     if (k > 1) {
-        cout << "End search\n";
+      cout << "End search\n";
     }
   }
   void search(Node *&node, const vector<ll> &answersI,
