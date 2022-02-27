@@ -84,9 +84,9 @@ struct ColoursLookup {
     nAnswers = answers.size();
     nGuesses = guesses.size();
     for (ll answerI = 0; answerI < nAnswers; answerI++) {
-      const string answer = answers[answerI];
+      const string &answer = answers[answerI];
       for (ll guessI = 0; guessI < nGuesses; guessI++) {
-        const string guess = guesses[guessI];
+        const string &guess = guesses[guessI];
         coloursLookup[answerI * nGuesses + guessI] =
             Wordle(answer).query(guess);
       }
@@ -164,34 +164,57 @@ struct Node {
 };
 
 struct Tree {
-  const vector<ll> &answers, &guesses;
+  const vector<string> &answers, &guesses;
+  const vector<ll> &answersI, &guessesI;
   const ColoursLookup &coloursLookup;
   Node *root;
-  Tree(const ColoursLookup &coloursLookup, const vector<ll> &answers,
-       const vector<ll> &guesses)
-      : coloursLookup(coloursLookup), answers(answers), guesses(guesses) {}
-  void search() { search(root, answers, guesses); }
-  void search(const ll &guess) { search(root, answers, guesses, guess); }
-  void search(Node *&node, const vector<ll> &answers,
-              const vector<ll> &guesses) {
-    vector<pair<double, ll>> topK =
-        rankGuesses(coloursLookup, answers, guesses, 1);
-    ll guess = topK[0].second;
-    search(node, answers, guesses, guess);
-  }
-  void search(Node *&node, const vector<ll> &answers, const vector<ll> &guesses,
-              const ll &guess) {
-    node = new Node(guess, answers.size());
-    unordered_map<ll, vector<ll>> answersWithColour;
-    for (const ll &answer : answers) {
-      ll colour = coloursLookup.find(answer, guess).value;
-      answersWithColour[colour].push_back(answer);
+  Tree(const ColoursLookup &coloursLookup, const vector<string> &answers,
+       const vector<string> &guesses, const vector<ll> &answersI,
+       const vector<ll> &guessesI)
+      : answers(answers), guesses(guesses), coloursLookup(coloursLookup),
+        answersI(answersI), guessesI(guessesI) {}
+  void search() { search(root, answersI, guessesI); }
+  void search(const ll &guess) { search(root, answersI, guessesI, guess); }
+  void search(Node *&node, const vector<ll> &answersI,
+              const vector<ll> &guessesI) {
+    ll k = 1;
+    if (answersI.size() > 100) {
+        k = 10;
     }
-    for (auto const &item : answersWithColour) {
+    vector<pair<double, ll>> topK =
+        rankGuesses(coloursLookup, answersI, guessesI, k);
+    sort(topK.rbegin(), topK.rend());
+    if (k > 1) {
+        cout << "Start search\n";
+    }
+    for (const auto &item : topK) {
+      ll guess = item.second;
+      search(node, answersI, guessesI, guess);
+      if (k > 1) {
+        cout << "Guess: " << guesses[guess] << ", Ent: " << item.first << ", EV: " << node->ev << "\n";
+      }
+    }
+    if (k > 1) {
+        cout << "End search\n";
+    }
+  }
+  void search(Node *&node, const vector<ll> &answersI,
+              const vector<ll> &guessesI, const ll &guess) {
+    Node *new_node = new Node(guess, answersI.size());
+    unordered_map<ll, vector<ll>> answersIWithColour;
+    for (const ll &answer : answersI) {
+      ll colour = coloursLookup.find(answer, guess).value;
+      answersIWithColour[colour].push_back(answer);
+    }
+    for (auto const &item : answersIWithColour) {
       if (item.first == FINISHED) {
         continue;
       }
-      search(node->children[item.first], item.second, guesses);
+      search(new_node->children[item.first], item.second, guessesI);
+    }
+    new_node->updateEV();
+    if (node == nullptr || node->ev > new_node->ev) {
+      node = new_node;
     }
   }
 };
@@ -208,14 +231,19 @@ int main() {
   vector<ll> answersI(answers.size()), guessesI(guesses.size());
   iota(answersI.begin(), answersI.end(), 0);
   iota(guessesI.begin(), guessesI.end(), 0);
-  vector<pair<double, ll>> rankedGuesses = rankGuesses(coloursLookup, answersI, guessesI, 10);
-  for (const auto &item: rankedGuesses) {
-    const ll &guess = item.second;
-    cout << "First Guess: " << guesses[guess] << "\n";
-    cout << "Entropy: " << item.first << "\n";
-    Tree tree(coloursLookup, answersI, guessesI);
-    tree.search(guess);
-    tree.root->updateEV();
-    cout << "EV: " << tree.root->ev << "\n";
-  }
+  //   vector<pair<double, ll>> rankedGuesses = rankGuesses(coloursLookup,
+  //   answersI, guessesI, 10); for (const auto &item: rankedGuesses) {
+  //     const ll &guess = item.second;
+  //     cout << "First Guess: " << guesses[guess] << "\n";
+  //     cout << "Entropy: " << item.first << "\n";
+  //     Tree tree(coloursLookup, answers, guesses, answersI, guessesI);
+  //     tree.search(guess);
+  //     tree.root->updateEV();
+  //     cout << "EV: " << tree.root->ev << "\n";
+  //   }
+  Tree tree(coloursLookup, answers, guesses, answersI, guessesI);
+  tree.search();
+  tree.root->updateEV();
+  cout << "Guess: " << guesses[tree.root->guess] << "\n";
+  cout << "EV: " << tree.root->ev << "\n";
 }
