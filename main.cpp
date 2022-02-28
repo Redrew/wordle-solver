@@ -99,22 +99,18 @@ struct ColoursLookup {
 
 double estimateGuessValue(const ColoursLookup &coloursLookup,
                           const vector<ll> &answers, const ll &guess) {
-  vector<ll> coloursCount(NUM_COLOUR_COMBINATIONS);
-  double n = answers.size();
+  unordered_map<ll, ll> coloursCount;
+  double dn = 1 / (double)answers.size();
   double entropy = 0;
   for (const ll &answer : answers) {
     coloursCount[coloursLookup.find(answer, guess).value]++;
   }
-  for (ll colours = 0; colours < NUM_COLOUR_COMBINATIONS; colours++) {
-    ll count = coloursCount[colours];
-    double logp, p = count / n;
-    if (colours != FINISHED) {
-      logp = log((count + 1) / n);
+  for (const auto &item : coloursCount) {
+    ll c = item.second;
+    if (item.first == FINISHED) {
+      entropy -= c * dn * log(c * dn);
     } else {
-      logp = log(p);
-    }
-    if (p != 0) {
-      entropy += -p * logp;
+      entropy -= c * dn * log((c + 1) * dn);
     }
   }
   return entropy;
@@ -127,8 +123,8 @@ vector<pair<double, ll>> rankGuesses(const ColoursLookup &coloursLookup,
 
   values.reserve(answers.size());
   for (const ll &guess : guesses) {
-    values.push_back(
-        pair(estimateGuessValue(coloursLookup, answers, guess), guess));
+    values.push_back(pair<double, ll>(
+        estimateGuessValue(coloursLookup, answers, guess), guess));
   }
   nth_element(values.begin(), values.end() - k, values.end());
   vector<pair<double, ll>> topk(values.end() - k, values.end());
@@ -167,7 +163,7 @@ struct Tree {
   const vector<string> &answers, &guesses;
   const vector<ll> &answersI, &guessesI;
   const ColoursLookup &coloursLookup;
-  Node *root;
+  Node *root = nullptr;
   Tree(const ColoursLookup &coloursLookup, const vector<string> &answers,
        const vector<string> &guesses, const vector<ll> &answersI,
        const vector<ll> &guessesI)
@@ -178,9 +174,6 @@ struct Tree {
   void search(Node *&node, const vector<ll> &answersI,
               const vector<ll> &guessesI) {
     ll k = 1;
-    if (answersI.size() > 100) {
-      k = 10;
-    }
     vector<pair<double, ll>> topK =
         rankGuesses(coloursLookup, answersI, guessesI, k);
     sort(topK.rbegin(), topK.rend());
@@ -232,16 +225,7 @@ int main() {
   vector<ll> answersI(answers.size()), guessesI(guesses.size());
   iota(answersI.begin(), answersI.end(), 0);
   iota(guessesI.begin(), guessesI.end(), 0);
-  //   vector<pair<double, ll>> rankedGuesses = rankGuesses(coloursLookup,
-  //   answersI, guessesI, 10); for (const auto &item: rankedGuesses) {
-  //     const ll &guess = item.second;
-  //     cout << "First Guess: " << guesses[guess] << "\n";
-  //     cout << "Entropy: " << item.first << "\n";
-  //     Tree tree(coloursLookup, answers, guesses, answersI, guessesI);
-  //     tree.search(guess);
-  //     tree.root->updateEV();
-  //     cout << "EV: " << tree.root->ev << "\n";
-  //   }
+  printRank(guesses, rankGuesses(coloursLookup, answersI, guessesI, 10));
   Tree tree(coloursLookup, answers, guesses, answersI, guessesI);
   tree.search();
   tree.root->updateEV();
