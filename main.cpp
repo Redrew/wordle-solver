@@ -16,6 +16,7 @@
 #define NUM_COLOUR_COMBINATIONS 243
 #define FINISHED 242
 #define NO_EV -1
+#define NO_GUESS -1
 #define ll long long
 
 using namespace std;
@@ -142,19 +143,19 @@ void printRank(const vector<string> &guesses,
 
 struct Node {
   ll guess, size;
-  unordered_map<ll, Node *> children;
+  unordered_map<ll, Node> children;
   double ev = NO_EV;
-  Node(ll guess, ll size) : guess(guess), size(size) {}
+  Node(ll guess = NO_GUESS, ll size = 0) : guess(guess), size(size) {}
   void updateEV() {
     ev = 1;
-    for (const auto &item : children) {
+    for (auto &item : children) {
       if (item.first == FINISHED) {
         continue;
-      } else if (item.second->ev == NO_EV) {
-        item.second->updateEV();
+      } else if (item.second.ev == NO_EV) {
+        item.second.updateEV();
       }
-      double p = item.second->size / (double)size;
-      ev += p * item.second->ev;
+      double p = item.second.size / (double)size;
+      ev += p * item.second.ev;
     }
   }
 };
@@ -163,7 +164,7 @@ struct Tree {
   const vector<string> &answers, &guesses;
   const vector<ll> &answersI, &guessesI;
   const ColoursLookup &coloursLookup;
-  Node *root = nullptr;
+  Node root;
   Tree(const ColoursLookup &coloursLookup, const vector<string> &answers,
        const vector<string> &guesses, const vector<ll> &answersI,
        const vector<ll> &guessesI)
@@ -171,7 +172,7 @@ struct Tree {
         answersI(answersI), guessesI(guessesI) {}
   void search() { search(root, answersI, guessesI); }
   void search(const ll &guess) { search(root, answersI, guessesI, guess); }
-  void search(Node *&node, const vector<ll> &answersI,
+  void search(Node &node, const vector<ll> &answersI,
               const vector<ll> &guessesI) {
     ll k = 1;
     vector<pair<double, ll>> topK =
@@ -185,16 +186,16 @@ struct Tree {
       search(node, answersI, guessesI, guess);
       if (k > 1) {
         cout << "Guess: " << guesses[guess] << ", Ent: " << item.first
-             << ", EV: " << node->ev << "\n";
+             << ", EV: " << node.ev << "\n";
       }
     }
     if (k > 1) {
       cout << "End search\n";
     }
   }
-  void search(Node *&node, const vector<ll> &answersI,
+  void search(Node &node, const vector<ll> &answersI,
               const vector<ll> &guessesI, const ll &guess) {
-    Node *new_node = new Node(guess, answersI.size());
+    Node new_node(guess, answersI.size());
     unordered_map<ll, vector<ll>> answersIWithColour;
     for (const ll &answer : answersI) {
       ll colour = coloursLookup.find(answer, guess).value;
@@ -204,10 +205,10 @@ struct Tree {
       if (item.first == FINISHED) {
         continue;
       }
-      search(new_node->children[item.first], item.second, guessesI);
+      search(new_node.children[item.first], item.second, guessesI);
     }
-    new_node->updateEV();
-    if (node == nullptr || node->ev > new_node->ev) {
+    new_node.updateEV();
+    if (node.guess == NO_GUESS || node.ev > new_node.ev) {
       node = new_node;
     }
   }
@@ -228,7 +229,7 @@ int main() {
   printRank(guesses, rankGuesses(coloursLookup, answersI, guessesI, 10));
   Tree tree(coloursLookup, answers, guesses, answersI, guessesI);
   tree.search();
-  tree.root->updateEV();
-  cout << "Guess: " << guesses[tree.root->guess] << "\n";
-  cout << "EV: " << tree.root->ev << "\n";
+  tree.root.updateEV();
+  cout << "Guess: " << guesses[tree.root.guess] << "\n";
+  cout << "EV: " << tree.root.ev << "\n";
 }
