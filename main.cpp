@@ -192,7 +192,7 @@ struct Tree {
   Node findBestNodeSync(const vector<ll> &answersI, const vector<ll> &guessesI,
                         const ranked_guesses_t &rankedGuesses) const {
     Node bestNode;
-    if (answersI.size() == 0) {
+    if (answersI.size() <= 2) {
       return searchGuess(answersI, guessesI, answersI[0]);
     }
     for (const auto &rankedGuess : rankedGuesses) {
@@ -209,7 +209,7 @@ struct Tree {
                          const ranked_guesses_t &rankedGuesses) const {
     Node bestNode;
     vector<future<Node>> newNodes;
-    if (answersI.size() == 0) {
+    if (answersI.size() <= 2) {
       return searchGuess(answersI, guessesI, answersI[0]);
     }
     for (const auto &rankedGuess : rankedGuesses) {
