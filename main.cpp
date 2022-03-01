@@ -256,16 +256,17 @@ int main() {
   vector<string> guesses(answers);
   guesses.insert(guesses.end(), otherValidGuesses.begin(),
                  otherValidGuesses.end());
-  cout << "Length of answers: " << answers.size() << "\n";
-  cout << "Length of guesses: " << guesses.size() << "\n";
+  cout << "Length of all valid answers: " << answers.size() << "\n";
+  cout << "Length of all valid guesses: " << guesses.size() << "\n";
   ColoursLookup coloursLookup(answers, guesses);
   vector<ll> answersI(answers.size()), guessesI(guesses.size());
   iota(answersI.begin(), answersI.end(), 0);
   iota(guessesI.begin(), guessesI.end(), 0);
+  cout << "\nTop first guesses according to heuristic:" << "\n";
   printRank(guesses, rankGuesses(coloursLookup, answersI, guessesI, 10));
   Tree tree(coloursLookup, answers, guesses, answersI, guessesI);
   tree.search();
   tree.root.updateEV();
-  cout << "Guess: " << guesses[tree.root.guess] << "\n";
-  cout << "EV: " << tree.root.ev << "\n";
+  cout << "\nBest first guess: " << guesses[tree.root.guess] << "\n";
+  cout << "Expected number of guesses: " << tree.root.ev << "\n";
 }
