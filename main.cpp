@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cassert>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -8,6 +9,7 @@
 #include <numeric>
 #include <random>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -20,6 +22,9 @@
 #define ll long long
 
 using namespace std;
+
+typedef pair<double, ll> ranked_guess_t;
+typedef vector<ranked_guess_t> ranked_guesses_t;
 
 const ll charToInt(const char &c) { return c - 'a'; }
 
@@ -117,25 +122,24 @@ double estimateGuessValue(const ColoursLookup &coloursLookup,
   return entropy;
 }
 
-vector<pair<double, ll>> rankGuesses(const ColoursLookup &coloursLookup,
-                                     const vector<ll> &answers,
-                                     const vector<ll> &guesses, const ll &k) {
-  vector<pair<double, ll>> values;
+ranked_guesses_t rankGuesses(const ColoursLookup &coloursLookup,
+                             const vector<ll> &answers,
+                             const vector<ll> &guesses, const ll &k) {
+  ranked_guesses_t values;
 
   values.reserve(answers.size());
   for (const ll &guess : guesses) {
-    values.push_back(pair<double, ll>(
+    values.push_back(ranked_guess_t(
         estimateGuessValue(coloursLookup, answers, guess), guess));
   }
   nth_element(values.begin(), values.end() - k, values.end());
-  vector<pair<double, ll>> topk(values.end() - k, values.end());
+  ranked_guesses_t topk(values.end() - k, values.end());
   return topk;
 }
 
-void printRank(const vector<string> &guesses,
-               vector<pair<double, ll>> rankedGuesses) {
+void printRank(const vector<string> &guesses, ranked_guesses_t rankedGuesses) {
   sort(rankedGuesses.rbegin(), rankedGuesses.rend());
-  for (const pair<double, ll> &guess : rankedGuesses) {
+  for (const ranked_guess_t &guess : rankedGuesses) {
     cout << "Guess: " << guesses[guess.second] << ", Value: " << guess.first
          << "\n";
   }
@@ -172,33 +176,60 @@ struct Tree {
       : answers(answers), guesses(guesses), coloursLookup(coloursLookup),
         answersI(answersI), guessesI(guessesI) {}
   void search() { root = findBestNode(answersI, guessesI); }
-  Node findBestNode(const vector<ll> &answersI, const vector<ll> &guessesI) {
-    ll k = 1;
-    Node bestNode;
-    vector<pair<double, ll>> topK =
-        rankGuesses(coloursLookup, answersI, guessesI, k);
-    sort(topK.rbegin(), topK.rend());
-    if (k > 1) {
-      cout << "Start search\n";
+  Node findBestNode(const vector<ll> &answersI,
+                    const vector<ll> &guessesI) const {
+    if (answersI.size() == answers.size()) {
+      return findBestNodeAsync(
+          answersI, guessesI,
+          rankGuesses(coloursLookup, answersI, guessesI, 10));
+    } else {
+      return findBestNodeSync(
+          answersI, guessesI,
+          rankGuesses(coloursLookup, answersI, guessesI, 1));
     }
-    for (const auto &item : topK) {
-      ll guess = item.second;
+  }
+
+  Node findBestNodeSync(const vector<ll> &answersI, const vector<ll> &guessesI,
+                        const ranked_guesses_t &rankedGuesses) const {
+    Node bestNode;
+    if (answersI.size() == 0) {
+      return searchGuess(answersI, guessesI, answersI[0]);
+    }
+    for (const auto &rankedGuess : rankedGuesses) {
+      ll guess = rankedGuess.second;
       Node newNode = searchGuess(answersI, guessesI, guess);
       if (!bestNode.hasEV() || bestNode.ev > newNode.ev) {
         bestNode = newNode;
       }
-      if (k > 1) {
-        cout << "Guess: " << guesses[guess] << ", Ent: " << item.first
-             << ", EV: " << newNode.ev << "\n";
-      }
-    }
-    if (k > 1) {
-      cout << "End search\n";
     }
     return bestNode;
   }
+
+  Node findBestNodeAsync(const vector<ll> &answersI, const vector<ll> &guessesI,
+                         const ranked_guesses_t &rankedGuesses) const {
+    Node bestNode;
+    vector<future<Node>> newNodes;
+    if (answersI.size() == 0) {
+      return searchGuess(answersI, guessesI, answersI[0]);
+    }
+    for (const auto &rankedGuess : rankedGuesses) {
+      ll guess = rankedGuess.second;
+      newNodes.push_back(
+          async(launch::async, [this, answersI, guessesI, guess]() -> Node {
+            return this->searchGuess(answersI, guessesI, guess);
+          }));
+    }
+    for (auto &nodeFuture : newNodes) {
+      const Node newNode = nodeFuture.get();
+      if (!bestNode.hasEV() || bestNode.ev > newNode.ev) {
+        bestNode = newNode;
+      }
+    }
+    return bestNode;
+  }
+
   Node searchGuess(const vector<ll> &answersI, const vector<ll> &guessesI,
-                   const ll &guess) {
+                   const ll &guess) const {
     Node node(guess, answersI.size());
     unordered_map<ll, vector<ll>> answersIWithColour;
     for (const ll &answer : answersI) {
@@ -218,10 +249,13 @@ struct Tree {
 
 int main() {
   vector<string> answers = read_file("words/answers.txt");
-  vector<string> guesses = read_file("words/guesses.txt");
+  vector<string> otherValidGuesses = read_file("words/guesses.txt");
   shuffle(answers.begin(), answers.end(), default_random_engine(0));
-  shuffle(guesses.begin(), guesses.end(), default_random_engine(1));
-  guesses.insert(guesses.end(), answers.begin(), answers.end());
+  shuffle(otherValidGuesses.begin(), otherValidGuesses.end(),
+          default_random_engine(1));
+  vector<string> guesses(answers);
+  guesses.insert(guesses.end(), otherValidGuesses.begin(),
+                 otherValidGuesses.end());
   cout << "Length of answers: " << answers.size() << "\n";
   cout << "Length of guesses: " << guesses.size() << "\n";
   ColoursLookup coloursLookup(answers, guesses);
