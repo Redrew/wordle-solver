@@ -146,7 +146,7 @@ struct Node {
   unordered_map<ll, Node> children;
   double ev = NO_EV;
   Node(ll guess = NO_GUESS, ll size = 0) : guess(guess), size(size) {}
-  bool hasEV() { return ev == NO_EV; }
+  bool hasEV() { return ev != NO_EV; }
   void updateEV() {
     ev = 1;
     for (auto &item : children) {
