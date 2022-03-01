@@ -146,12 +146,13 @@ struct Node {
   unordered_map<ll, Node> children;
   double ev = NO_EV;
   Node(ll guess = NO_GUESS, ll size = 0) : guess(guess), size(size) {}
+  bool hasEV() { return ev == NO_EV; }
   void updateEV() {
     ev = 1;
     for (auto &item : children) {
       if (item.first == FINISHED) {
         continue;
-      } else if (item.second.ev == NO_EV) {
+      } else if (!item.second.hasEV()) {
         item.second.updateEV();
       }
       double p = item.second.size / (double)size;
@@ -170,11 +171,10 @@ struct Tree {
        const vector<ll> &guessesI)
       : answers(answers), guesses(guesses), coloursLookup(coloursLookup),
         answersI(answersI), guessesI(guessesI) {}
-  void search() { search(root, answersI, guessesI); }
-  void search(const ll &guess) { search(root, answersI, guessesI, guess); }
-  void search(Node &node, const vector<ll> &answersI,
-              const vector<ll> &guessesI) {
+  void search() { root = findBestNode(answersI, guessesI); }
+  Node findBestNode(const vector<ll> &answersI, const vector<ll> &guessesI) {
     ll k = 1;
+    Node bestNode;
     vector<pair<double, ll>> topK =
         rankGuesses(coloursLookup, answersI, guessesI, k);
     sort(topK.rbegin(), topK.rend());
@@ -183,19 +183,23 @@ struct Tree {
     }
     for (const auto &item : topK) {
       ll guess = item.second;
-      search(node, answersI, guessesI, guess);
+      Node newNode = searchGuess(answersI, guessesI, guess);
+      if (!bestNode.hasEV() || bestNode.ev > newNode.ev) {
+        bestNode = newNode;
+      }
       if (k > 1) {
         cout << "Guess: " << guesses[guess] << ", Ent: " << item.first
-             << ", EV: " << node.ev << "\n";
+             << ", EV: " << newNode.ev << "\n";
       }
     }
     if (k > 1) {
       cout << "End search\n";
     }
+    return bestNode;
   }
-  void search(Node &node, const vector<ll> &answersI,
-              const vector<ll> &guessesI, const ll &guess) {
-    Node new_node(guess, answersI.size());
+  Node searchGuess(const vector<ll> &answersI, const vector<ll> &guessesI,
+                   const ll &guess) {
+    Node node(guess, answersI.size());
     unordered_map<ll, vector<ll>> answersIWithColour;
     for (const ll &answer : answersI) {
       ll colour = coloursLookup.find(answer, guess).value;
@@ -205,12 +209,10 @@ struct Tree {
       if (item.first == FINISHED) {
         continue;
       }
-      search(new_node.children[item.first], item.second, guessesI);
+      node.children[item.first] = findBestNode(item.second, guessesI);
     }
-    new_node.updateEV();
-    if (node.guess == NO_GUESS || node.ev > new_node.ev) {
-      node = new_node;
-    }
+    node.updateEV();
+    return node;
   }
 };
 
