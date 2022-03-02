@@ -178,14 +178,14 @@ struct Tree {
   void search() { root = findBestNode(answersI, guessesI); }
   Node findBestNode(const vector<ll> &answersI,
                     const vector<ll> &guessesI) const {
-    if (answersI.size() == answers.size()) {
+    if (answersI.size() > 80) {
       return findBestNodeAsync(
           answersI, guessesI,
-          rankGuesses(coloursLookup, answersI, guessesI, 10));
+          rankGuesses(coloursLookup, answersI, guessesI, 15));
     } else {
       return findBestNodeSync(
           answersI, guessesI,
-          rankGuesses(coloursLookup, answersI, guessesI, 1));
+          rankGuesses(coloursLookup, answersI, guessesI, 15));
     }
   }
 
