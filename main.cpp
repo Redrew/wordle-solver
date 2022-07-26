@@ -1,179 +1,25 @@
 #include <algorithm>
 #include <cassert>
-#include <fstream>
 #include <future>
 #include <iostream>
 #include <limits>
 #include <map>
-#include <math.h>
 #include <numeric>
 #include <random>
-#include <string>
 #include <thread>
-#include <unordered_map>
 #include <utility>
-#include <vector>
 
-#define NUM_LETTERS 26
-#define NUM_COLOUR_COMBINATIONS 243
-#define FINISHED 242
-#define NO_EV -1
-#define NO_GUESS -1
-#define ll long long
 
-using namespace std;
-
-typedef pair<double, ll> ranked_guess_t;
-typedef vector<ranked_guess_t> ranked_guesses_t;
-
-const ll charToInt(const char &c) { return c - 'a'; }
-
-const vector<string> read_file(const string &filename) {
-  vector<string> words;
-  string line;
-  ifstream file(filename);
-  if (file.is_open()) {
-    while (getline(file, line)) {
-      words.push_back(line);
-    }
-    file.close();
-  }
-  return words;
-}
-
-struct Colours {
-  ll value;
-  Colours(ll value) : value(value) {}
-  string getString() {
-    string response = "----- ";
-    string allColours = "-yg";
-    ll n = value;
-    for (ll i = 0; i < 5; i++) {
-      ll colourAtI = n % 3;
-      n = n / 3;
-      response[i] = allColours[colourAtI];
-    }
-    return response;
-  }
-};
-
-struct Wordle {
-  string answer;
-  Wordle(const string &answer) : answer(answer) {}
-  Colours query(const string &guess) {
-    vector<ll> letterCount(NUM_LETTERS);
-    ll value = 0;
-    for (ll i = 0; i < 5; i++) {
-      ll answerLetter = charToInt(answer[i]);
-      if (answer[i] == guess[i]) {
-        value += 2 * pow(3, i);
-      } else {
-        letterCount[answerLetter]++;
-      }
-    }
-    for (ll i = 0; i < 5; i++) {
-      ll guessLetter = charToInt(guess[i]);
-      if (answer[i] != guess[i] && letterCount[guessLetter] > 0) {
-        letterCount[guessLetter]--;
-        value += 1 * pow(3, i);
-      }
-    }
-    return Colours(value);
-  }
-};
-
-struct ColoursLookup {
-  vector<Colours> coloursLookup;
-  ll nAnswers, nGuesses;
-  ColoursLookup(const vector<string> &answers, const vector<string> &guesses) {
-    coloursLookup.reserve(answers.size() * guesses.size());
-    nAnswers = answers.size();
-    nGuesses = guesses.size();
-    for (ll answerI = 0; answerI < nAnswers; answerI++) {
-      const string &answer = answers[answerI];
-      for (ll guessI = 0; guessI < nGuesses; guessI++) {
-        const string &guess = guesses[guessI];
-        coloursLookup[answerI * nGuesses + guessI] =
-            Wordle(answer).query(guess);
-      }
-    }
-  }
-  Colours find(const ll &answerI, const ll &guessI) const {
-    return coloursLookup[answerI * nGuesses + guessI];
-  }
-};
-
-double estimateGuessValue(const ColoursLookup &coloursLookup,
-                          const vector<ll> &answers, const ll &guess) {
-  unordered_map<ll, ll> coloursCount;
-  double dn = 1 / (double)answers.size();
-  double entropy = 0;
-  for (const ll &answer : answers) {
-    coloursCount[coloursLookup.find(answer, guess).value]++;
-  }
-  for (const auto &item : coloursCount) {
-    ll c = item.second;
-    if (item.first == FINISHED) {
-      entropy -= c * dn * log(c * dn);
-    } else {
-      entropy -= c * dn * log((c + 1) * dn);
-    }
-  }
-  return entropy;
-}
-
-ranked_guesses_t rankGuesses(const ColoursLookup &coloursLookup,
-                             const vector<ll> &answers,
-                             const vector<ll> &guesses, const ll &k) {
-  ranked_guesses_t values;
-
-  values.reserve(answers.size());
-  for (const ll &guess : guesses) {
-    values.push_back(ranked_guess_t(
-        estimateGuessValue(coloursLookup, answers, guess), guess));
-  }
-  nth_element(values.begin(), values.end() - k, values.end());
-  ranked_guesses_t topk(values.end() - k, values.end());
-  return topk;
-}
-
-void printRank(const vector<string> &guesses, ranked_guesses_t rankedGuesses) {
-  sort(rankedGuesses.rbegin(), rankedGuesses.rend());
-  for (const ranked_guess_t &guess : rankedGuesses) {
-    cout << "Guess: " << guesses[guess.second] << ", Value: " << guess.first
-         << "\n";
-  }
-}
-
-struct Node {
-  ll guess, size;
-  unordered_map<ll, Node> children;
-  double ev = NO_EV;
-  Node(ll guess = NO_GUESS, ll size = 0) : guess(guess), size(size) {}
-  bool hasEV() { return ev != NO_EV; }
-  void updateEV() {
-    ev = 1;
-    for (auto &item : children) {
-      if (item.first == FINISHED) {
-        continue;
-      } else if (!item.second.hasEV()) {
-        item.second.updateEV();
-      }
-      double p = item.second.size / (double)size;
-      ev += p * item.second.ev;
-    }
-  }
-};
 
 struct Tree {
   const vector<string> &answers, &guesses;
   const vector<ll> &answersI, &guessesI;
-  const ColoursLookup &coloursLookup;
+  const OutputCache &outputCache;
   Node root;
-  Tree(const ColoursLookup &coloursLookup, const vector<string> &answers,
+  Tree(const OutputCache &outputCache, const vector<string> &answers,
        const vector<string> &guesses, const vector<ll> &answersI,
        const vector<ll> &guessesI)
-      : answers(answers), guesses(guesses), coloursLookup(coloursLookup),
+      : answers(answers), guesses(guesses), outputCache(outputCache),
         answersI(answersI), guessesI(guessesI) {}
   void search() { root = findBestNode(answersI, guessesI); }
   Node findBestNode(const vector<ll> &answersI,
@@ -181,11 +27,11 @@ struct Tree {
     if (answersI.size() > 80) {
       return findBestNodeAsync(
           answersI, guessesI,
-          rankGuesses(coloursLookup, answersI, guessesI, 15));
+          rankGuesses(outputCache, answersI, guessesI, 15));
     } else {
       return findBestNodeSync(
           answersI, guessesI,
-          rankGuesses(coloursLookup, answersI, guessesI, 15));
+          rankGuesses(outputCache, answersI, guessesI, 15));
     }
   }
 
@@ -233,7 +79,7 @@ struct Tree {
     Node node(guess, answersI.size());
     unordered_map<ll, vector<ll>> answersIWithColour;
     for (const ll &answer : answersI) {
-      ll colour = coloursLookup.find(answer, guess).value;
+      ll colour = outputCache.find(answer, guess).value;
       answersIWithColour[colour].push_back(answer);
     }
     for (auto const &item : answersIWithColour) {
@@ -258,13 +104,13 @@ int main() {
                  otherValidGuesses.end());
   cout << "Length of all valid answers: " << answers.size() << "\n";
   cout << "Length of all valid guesses: " << guesses.size() << "\n";
-  ColoursLookup coloursLookup(answers, guesses);
+  OutputCache outputCache(answers, guesses);
   vector<ll> answersI(answers.size()), guessesI(guesses.size());
   iota(answersI.begin(), answersI.end(), 0);
   iota(guessesI.begin(), guessesI.end(), 0);
   cout << "\nTop first guesses according to heuristic:" << "\n";
-  printRank(guesses, rankGuesses(coloursLookup, answersI, guessesI, 10));
-  Tree tree(coloursLookup, answers, guesses, answersI, guessesI);
+  printRank(guesses, rankGuesses(outputCache, answersI, guessesI, 10));
+  Tree tree(outputCache, answers, guesses, answersI, guessesI);
   tree.search();
   tree.root.updateEV();
   cout << "\nBest first guess: " << guesses[tree.root.guess] << "\n";
